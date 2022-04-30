@@ -1,0 +1,96 @@
+service: serverless-fullstack-example
+
+frameworkVersion: "3"
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-dynamodb-local
+  - serverless-offline
+
+custom:
+  dynamodb:
+    stages:
+      - dev
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+      seed: true
+    # Comment if you don't have a DynamoDB running locally
+    #  noStart: true
+    seed:
+      domain:
+       sources:
+        - table: ${self:provider.environment.DYNAMODB_TABLE}
+          sources: [./seed/users.json]
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  httpApi:
+    cors: true
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+functions:
+  create-user:
+    handler: api/users/create/create.handler
+    events:
+      - http:
+          path: user
+          method: post
+
+  list-users:
+    handler: api/users/list/list.handler
+    events:
+      - http:
+          path: user
+          method: get
+
+  get-user:
+    handler: api/users/get/get.handler
+    events:
+      - http:
+          path: user/{id}
+          method: get
+
+  update-user:
+    handler: api/users/update/update.handler
+    events:
+      - http:
+          path: user/{id}
+          method: put
+  delete-user:
+    handler: api/users/delete/delete.handler
+    events:
+      - http:
+          path: user/{id}
+          method: delete
+
+resources:
+  Resources:
+    UsersDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
